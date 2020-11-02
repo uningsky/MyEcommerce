@@ -36,7 +36,8 @@ namespace MyEcommerce_product_api
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
         {
-            services.AddDbContext<ProductContext>(opt => opt.UseInMemoryDatabase("ProductDb")); 
+            //services.AddDbContext<ProductContext>(opt => opt.UseInMemoryDatabase("ProductDb")); 
+            services.AddDbContext<ProductContext>(opt => opt.UseSqlServer(Configuration.GetConnectionString("MyecommerceDB")));
             services.AddControllers();
 
             services.AddAutoMapper(typeof(AutoMappingProfile));
