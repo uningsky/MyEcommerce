@@ -12,7 +12,7 @@ namespace MyEcommerce_product_api.Utils
     {
         public AutoMappingProfile()
         {
-            CreateMap<Product, ProductViewModel>(); 
+            CreateMap<Product, ProductDto>(); 
         }
     }
 }

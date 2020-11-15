@@ -5,6 +5,9 @@ using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 using AutoMapper;
+using IdentityModel;
+using IdentityServer4.Models;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -15,6 +18,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using MyEcommerce_product_api.Controllers;
 using MyEcommerce_product_api.Models;
@@ -40,11 +44,39 @@ namespace MyEcommerce_product_api
             services.AddDbContext<ProductContext>(opt => opt.UseSqlServer(Configuration.GetConnectionString("MyecommerceDB")));
             services.AddControllers();
 
+            var identityUrl = Configuration.GetValue<string>("IdentityUrl");
+
+            services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+                .AddJwtBearer(options =>
+                {
+                    options.Authority = identityUrl;
+                    options.RequireHttpsMetadata = false;
+                    //options.Audience = "product";
+                    //options.Audience = "productClientCredentials";
+
+                    options.TokenValidationParameters = new TokenValidationParameters
+                    {
+                        ValidateAudience = false
+                    };
+
+
+                });
+
+            services.AddAuthorization(options =>
+            {
+                options.AddPolicy("ApiScope", policy =>
+                {
+                    policy.AuthenticationSchemes.Add(JwtBearerDefaults.AuthenticationScheme);
+                    //policy.RequireAuthenticatedUser();
+                    policy.RequireClaim("scope", "product.read");
+                });
+            });
+
             services.AddAutoMapper(typeof(AutoMappingProfile));
 
             services.AddLink(policy =>
             {
-                policy.AddPolicy<ProductViewModel>(model =>
+                policy.AddPolicy<ProductDto>(model =>
                 {
                     model
                         .AddSelf(m => m.Id, "This is a GET self link.")
@@ -82,10 +114,39 @@ namespace MyEcommerce_product_api
                     }
                 });
 
+                c.AddSecurityDefinition("oauth2", new OpenApiSecurityScheme
+                {
+                    Type = SecuritySchemeType.OAuth2,
+                    Flows = new OpenApiOAuthFlows()
+                    {
+                        ClientCredentials = new OpenApiOAuthFlow()
+                        {
+                            //AuthorizationUrl = new Uri($"{Configuration.GetValue<string>("IdentityUrlExternal")}/connect/authorize"),
+                            TokenUrl = new Uri($"{Configuration.GetValue<string>("IdentityUrlExternal")}/connect/token"),
+                            Scopes = new Dictionary<string, string>()
+                            {
+                                { "product.read", "Product API" }
+                            }
+                        },
+                        //Implicit = new OpenApiOAuthFlow()
+                        //{
+                        //    AuthorizationUrl = new Uri($"{Configuration.GetValue<string>("IdentityUrlExternal")}/connect/authorize"),
+                        //    TokenUrl = new Uri($"{Configuration.GetValue<string>("IdentityUrlExternal")}/connect/token"),
+                        //    Scopes = new Dictionary<string, string>()
+                        //    {
+                        //        { "product.read", "Product API" }
+                        //    }
+                        //}
+                    }
+                });
+
+                c.OperationFilter<AuthorizeCheckOperationFilter>();
+
                 var xmlFile = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
                 var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
                 c.IncludeXmlComments(xmlPath);
-            }); 
+            });
+
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
@@ -100,12 +161,17 @@ namespace MyEcommerce_product_api
             app.UseSwaggerUI(c =>
             {
                 c.SwaggerEndpoint("/swagger/v1/swagger.json", "Product Api V1");
-            }); 
+                //c.OAuthClientId("productswaggerui");
+                c.OAuthAppName("Product Swagger UI");
+                c.OAuthClientId("productclient");
+                c.OAuthClientSecret("secret");
+            });
 
             app.UseHttpsRedirection();
 
             app.UseRouting();
 
+            app.UseAuthorization();
             app.UseAuthorization();
 
             app.UseEndpoints(endpoints =>

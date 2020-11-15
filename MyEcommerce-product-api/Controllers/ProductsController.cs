@@ -5,6 +5,7 @@ using System.Net;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using AutoMapper;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
@@ -15,6 +16,8 @@ using MyEcommerce_product_api.ViewModels;
 namespace MyEcommerce_product_api.Controllers
 {
     [Route("api/[controller]")]
+    [Authorize(Policy = "ApiScope")]
+    //[Authorize]
     [ApiController]
     public class ProductsController : ControllerBase
     {
@@ -36,7 +39,7 @@ namespace MyEcommerce_product_api.Controllers
         /// <returns> Produtcs </returns>
         [HttpGet(Name = "GetAllModelsRoute")]
         //[ProducesResponseType(typeof(PaginatedItemsViewModel<ProductViewModel>), (int)HttpStatusCode.OK)]
-        public async Task<ActionResult<PaginatedViewModel<ProductViewModel>>> GetProducts([FromQuery] int pageSize = 2, [FromQuery] int pageIndex = 0)
+        public async Task<ActionResult<PaginatedViewModel<ProductDto>>> GetProducts([FromQuery] int pageSize = 2, [FromQuery] int pageIndex = 0)
         {
             var totalItems = await _context.Products.LongCountAsync();
 
@@ -46,9 +49,9 @@ namespace MyEcommerce_product_api.Controllers
                 .Take(pageSize)
                 .ToListAsync();
 
-            var vm = _mapper.Map<List<ProductViewModel>>(itemsOnPage);
+            var vm = _mapper.Map<List<ProductDto>>(itemsOnPage);
             
-            var result = new PaginatedViewModel<ProductViewModel>(pageIndex, pageSize,(int)totalItems,vm);
+            var result = new PaginatedViewModel<ProductDto>(pageIndex, pageSize,(int)totalItems,vm);
 
             return result;
         }
@@ -57,7 +60,7 @@ namespace MyEcommerce_product_api.Controllers
         [HttpGet("{id}", Name = "GetModelByIdRoute")]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
-        public async Task<ActionResult<ProductViewModel>> GetProduct(long id)
+        public async Task<ActionResult<ProductDto>> GetProduct(long id)
         {
             var product = await _context.Products.FindAsync(id);
 
@@ -66,7 +69,7 @@ namespace MyEcommerce_product_api.Controllers
                 return NotFound();
             }
 
-            var model = _mapper.Map<ProductViewModel>(product);
+            var model = _mapper.Map<ProductDto>(product);
 
             return model;
         }

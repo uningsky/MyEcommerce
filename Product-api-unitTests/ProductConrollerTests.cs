@@ -27,22 +27,15 @@ using Xunit;
 
 namespace Product_api_unitTests
 {
-    public class ProductsControllerTests
+    public class ProductsControllerTests : IClassFixture<DatabaseFixture>
     {
-        private readonly DbContextOptions<ProductContext> _dbOptions;
+        DatabaseFixture _fixture;
+
         private readonly IMapper _mapper;
 
-        public ProductsControllerTests()
+        public ProductsControllerTests(DatabaseFixture fixture)
         {
-            _dbOptions = new DbContextOptionsBuilder<ProductContext>()
-                .UseInMemoryDatabase(databaseName: "in-memory")
-                .Options;
-
-            using (var dbContext = new ProductContext(_dbOptions))
-            {
-                dbContext.AddRange(GetFakeProduct());
-                dbContext.SaveChanges();
-            }
+            _fixture = fixture; 
 
             var mockMapper = new MapperConfiguration(cfg =>
             {
@@ -60,58 +53,43 @@ namespace Product_api_unitTests
             var expectedItemsInPage = 2;
             var expectedTotalItems = 6;
 
-            var productContext = new ProductContext(_dbOptions);
 
-
-            //Act
-            var orderController = new ProductsController(productContext, _mapper);
-            var actionResult = await orderController.GetProducts(pageSize, pageIndex);
+            var controller = new ProductsController(_fixture.DbContext, _mapper);
+            var actionResult = await controller.GetProducts(pageSize, pageIndex);
 
             //Assert
-            Assert.IsType<ActionResult<PaginatedViewModel<ProductViewModel>>>(actionResult);
-            var page = Assert.IsAssignableFrom<PaginatedViewModel<ProductViewModel>>(actionResult.Value);
+            Assert.IsType<ActionResult<PaginatedViewModel<ProductDto>>>(actionResult);
+            var page = Assert.IsAssignableFrom<PaginatedViewModel<ProductDto>>(actionResult.Value);
             Assert.Equal(expectedTotalItems, page.Count);
             Assert.Equal(pageIndex, page.PageIndex);
             Assert.Equal(pageSize, page.PageSize);
             Assert.Equal(expectedItemsInPage, page.Data.Count());
         }
 
-        private List<Product> GetFakeProduct()
+        [Fact]
+        public async Task Get_ProductById_ReturnsNotFound()
         {
-            return new List<Product>()
-            {
-                new Product()
-                {
-                    Id = 1,
-                    Name = "fakeItemA",
-                },
-                new Product()
-                {
-                    Id = 2,
-                    Name = "fakeItemB",
-                },
-                new Product()
-                {
-                    Id = 3,
-                    Name = "fakeItemC",
-                },
-                new Product()
-                {
-                    Id = 4,
-                    Name = "fakeItemD",
-                },
-                new Product()
-                {
-                    Id = 5,
-                    Name = "fakeItemE",
-                },
-                new Product()
-                {
-                    Id = 6,
-                    Name = "fakeItemF",
-                }
-            };
+
+            var controller = new ProductsController(_fixture.DbContext, _mapper);
+            var actionResult = await controller.GetProduct(99);
+
+            Assert.IsType<ActionResult<ProductDto>>(actionResult);
+            Assert.IsType<NotFoundResult>(actionResult.Result);
         }
+
+        [Fact]
+        public async Task Get_ProductById_ReturnsSuccess()
+        {
+            var controller = new ProductsController(_fixture.DbContext, _mapper);
+            var actionResult = await controller.GetProduct(3);
+
+            Assert.IsType<ActionResult<ProductDto>>(actionResult);
+            var value = Assert.IsAssignableFrom<ProductDto>(actionResult.Value);
+            Assert.Equal(3, value.Id);
+            Assert.Equal("fakeItemC", value.Name);
+            Assert.Equal(300, value.Price);
+        }
+
     }
 
 }
