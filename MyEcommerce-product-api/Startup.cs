@@ -18,6 +18,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.IdentityModel.Logging;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using MyEcommerce_product_api.Controllers;
@@ -41,14 +42,26 @@ namespace MyEcommerce_product_api
         public void ConfigureServices(IServiceCollection services)
         {
             //services.AddDbContext<ProductContext>(opt => opt.UseInMemoryDatabase("ProductDb")); 
-            services.AddDbContext<ProductContext>(opt => opt.UseSqlServer(Configuration.GetConnectionString("MyecommerceDB")));
+            services.AddDbContext<ProductContext>(opt => 
+                opt.UseSqlServer(Configuration.GetConnectionString("MyecommerceDB"), 
+                opt =>
+                {
+                    opt.EnableRetryOnFailure(
+                       maxRetryCount: 15,
+                       maxRetryDelay: TimeSpan.FromSeconds(30),
+                       errorNumbersToAdd: null
+                       );
+                }));
             services.AddControllers();
 
             var identityUrl = Configuration.GetValue<string>("IdentityUrl");
 
+            IdentityModelEventSource.ShowPII = true;
+
             services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 .AddJwtBearer(options =>
                 {
+                    //options.Authority = Configuration.GetValue<string>("IdentityUrlExternal"); 
                     options.Authority = identityUrl;
                     options.RequireHttpsMetadata = false;
                     //options.Audience = "product";
@@ -58,7 +71,6 @@ namespace MyEcommerce_product_api
                     {
                         ValidateAudience = false
                     };
-
 
                 });
 
@@ -167,7 +179,7 @@ namespace MyEcommerce_product_api
                 c.OAuthClientSecret("secret");
             });
 
-            app.UseHttpsRedirection();
+            //app.UseHttpsRedirection();
 
             app.UseRouting();
 

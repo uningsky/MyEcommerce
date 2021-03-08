@@ -7,7 +7,9 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using MyEcommerce_product_api.Extensions;
 using MyEcommerce_product_api.Models;
+using MyEcommerce_product_api.Seed;
 
 namespace MyEcommerce_product_api
 {
@@ -17,11 +19,23 @@ namespace MyEcommerce_product_api
         {
             var host = CreateHostBuilder(args).Build();
             //SeedDatabase(host);
+            host.MigrateDbContext<ProductContext>((context, services) =>
+            {
+                var logger = services.GetService<ILogger<ProductDbContextSeed>>();
+
+                new ProductDbContextSeed()
+                    .SeedAsync(context, logger)
+                    .Wait();
+            }); 
             host.Run(); 
         }
 
         public static IHostBuilder CreateHostBuilder(string[] args) =>
             Host.CreateDefaultBuilder(args)
+                .ConfigureAppConfiguration((hosingContext, config) =>
+                {
+                    config.AddEnvironmentVariables(); 
+                })
                 .ConfigureWebHostDefaults(webBuilder =>
                 {
                     webBuilder.UseStartup<Startup>();

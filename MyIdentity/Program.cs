@@ -2,10 +2,19 @@
 // Licensed under the Apache License, Version 2.0. See LICENSE in the project root for license information.
 
 
+using IdentityServer4.EntityFramework.DbContexts;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using MyIdentity.Data;
+using MyIdentity.Extensions;
+using MyIdentity.Models;
+using MyIdentity.Seeds;
 using Serilog;
 using Serilog.Events;
 using Serilog.Sinks.SystemConsole.Themes;
@@ -45,15 +54,28 @@ namespace MyIdentity
 
                 var host = CreateHostBuilder(args).Build();
 
-                if (seed)
-                {
-                    Log.Information("Seeding database...");
-                    var config = host.Services.GetRequiredService<IConfiguration>();
-                    var connectionString = config.GetConnectionString("MyIdentityDB");
-                    SeedData.EnsureSeedData(connectionString);
-                    Log.Information("Done seeding database.");
-                    return 0;
-                }
+                Log.Information("Applying migrations ");
+                host.MigrateDbContext<PersistedGrantDbContext>((_, __) => { })
+                    .MigrateDbContext<ApplicationDbContext>((context, services) =>
+                    {
+                        var configuration = services.GetRequiredService<IConfiguration>();
+
+                        var logger = services.GetService<ILogger<ApplicationDbContextSeed>>();
+
+                        logger.LogInformation("configuration.MyIdentityDB: {0}", configuration.GetConnectionString("MyIdentityDB"));
+
+                        new ApplicationDbContextSeed()
+                            .SeedAsync(context, services, logger)
+                            .Wait(); 
+
+                    })
+                    .MigrateDbContext<ConfigurationDbContext>((context, services) =>
+                    {
+                        var configuration = services.GetRequiredService<IConfiguration>();
+                        new ConfigurationDbContextSeed()
+                            .SeedAsync(context, configuration)
+                            .Wait();
+                    });
 
                 Log.Information("Starting host...");
                 host.Run();
@@ -72,10 +94,15 @@ namespace MyIdentity
 
         public static IHostBuilder CreateHostBuilder(string[] args) =>
             Host.CreateDefaultBuilder(args)
+                .ConfigureAppConfiguration((hosingContext, config) =>
+                {
+                    config.AddEnvironmentVariables();
+                })
                 .UseSerilog()
                 .ConfigureWebHostDefaults(webBuilder =>
                 {
                     webBuilder.UseStartup<Startup>();
                 });
+
     }
 }

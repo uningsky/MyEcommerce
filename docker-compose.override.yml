@@ -1,0 +1,35 @@
+version: '3.4'
+
+services:
+  mssqldata:
+    environment: 
+      - ACCEPT_EULA=Y
+      - SA_PASSWORD=123qwe!@#
+    ports:
+      - "5433:1433"
+
+  myidentity:
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:80
+      - ConnectionStrings__MyIdentityDB=Server=mssqldata;Database=Myecommerce.IdentityDB;User Id=sa;Password=123qwe!@#
+      - ProductApiClient=http://host.docker.internal:5102
+    ports:
+      - "5101:80"
+    volumes:
+      - ${APPDATA}/Microsoft/UserSecrets:/root/.microsoft/usersecrets:ro
+      - ${APPDATA}/ASP.NET/Https:/root/.aspnet/https:ro
+
+  myecommerce-product-api:
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:80
+      - ConnectionStrings__MyecommerceDB=Server=mssqldata;Database=Myecommerce.ProductDB;User Id=sa;Password=123qwe!@#
+      - IdentityUrl=http://myidentity
+      - IdentityUrlExternal=http://host.docker.internal:5101
+    ports:
+      - "5102:80"
+    volumes:
+      - ${APPDATA}/Microsoft/UserSecrets:/root/.microsoft/usersecrets:ro
+      - ${APPDATA}/ASP.NET/Https:/root/.aspnet/https:ro
+  

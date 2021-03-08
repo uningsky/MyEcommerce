@@ -18,6 +18,7 @@ using IdentityServer4.EntityFramework.DbContexts;
 using System.Linq;
 using IdentityServer4.EntityFramework.Mappers;
 using System.Collections.Generic;
+using System;
 
 namespace MyIdentity
 {
@@ -40,7 +41,17 @@ namespace MyIdentity
             var migrationsAssembly = typeof(Startup).GetTypeInfo().Assembly.GetName().Name;
 
             services.AddDbContext<ApplicationDbContext>(options =>
-                options.UseSqlServer(Configuration.GetConnectionString("MyIdentityDB")));
+                options.UseSqlServer(Configuration.GetConnectionString("MyIdentityDB"), 
+                options =>
+                {
+                    options.MigrationsAssembly(migrationsAssembly);
+
+                    options.EnableRetryOnFailure(
+                        maxRetryCount: 10, 
+                        maxRetryDelay: TimeSpan.FromSeconds(30), 
+                        errorNumbersToAdd: null
+                        );
+                }));
 
             services.AddIdentity<ApplicationUser, IdentityRole>()
                 .AddEntityFrameworkStores<ApplicationDbContext>()
@@ -48,6 +59,8 @@ namespace MyIdentity
 
             var builder = services.AddIdentityServer(options =>
             {
+                options.IssuerUri = "http://host.docker.internal:5101";
+
                 options.Events.RaiseErrorEvents = true;
                 options.Events.RaiseInformationEvents = true;
                 options.Events.RaiseFailureEvents = true;
@@ -56,18 +69,34 @@ namespace MyIdentity
                 // see https://identityserver4.readthedocs.io/en/latest/topics/resources.html
                 options.EmitStaticAudienceClaim = true;
             })
-                .AddConfigurationStore(options =>
-                {
-                    options.ConfigureDbContext = b => b.UseSqlServer(Configuration.GetConnectionString("MyIdentityDB"),
-                        sql => sql.MigrationsAssembly(migrationsAssembly));
-                })
-                .AddOperationalStore(options =>
-                {
-                    options.ConfigureDbContext = b => b.UseSqlServer(Configuration.GetConnectionString("MyIdentityDB"),
-                        sql => sql.MigrationsAssembly(migrationsAssembly));
-                })
+            .AddConfigurationStore(options =>
+            {
+                options.ConfigureDbContext = b => b.UseSqlServer(Configuration.GetConnectionString("MyIdentityDB"),
+                    sql => {
+                        sql.MigrationsAssembly(migrationsAssembly);
 
-                .AddAspNetIdentity<ApplicationUser>();
+                        sql.EnableRetryOnFailure(
+                        maxRetryCount: 10,
+                        maxRetryDelay: TimeSpan.FromSeconds(30),
+                        errorNumbersToAdd: null
+                        );
+                    });
+            })
+            .AddOperationalStore(options =>
+            {
+                options.ConfigureDbContext = b => b.UseSqlServer(Configuration.GetConnectionString("MyIdentityDB"),
+                    sql => {
+                        sql.MigrationsAssembly(migrationsAssembly);
+                        
+                        sql.EnableRetryOnFailure(
+                        maxRetryCount: 10,
+                        maxRetryDelay: TimeSpan.FromSeconds(30),
+                        errorNumbersToAdd: null
+                        );
+                    });
+            })
+
+            .AddAspNetIdentity<ApplicationUser>();
 
             // not recommended for production - you need to store your key material somewhere secure
             builder.AddDeveloperSigningCredential();
@@ -95,7 +124,7 @@ namespace MyIdentity
                 {
                     policy
                         //.AllowAnyOrigin()
-                        .WithOrigins("https://localhost:44320")
+                        .WithOrigins("http://localhost:5102")
                         .AllowAnyHeader()
                         .AllowAnyMethod()
                         .AllowCredentials()
